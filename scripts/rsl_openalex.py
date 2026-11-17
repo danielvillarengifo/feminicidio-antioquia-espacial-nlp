@@ -38,12 +38,11 @@ import json
 import re
 import sys
 import time
-import unicodedata
 from datetime import datetime, timezone
 
 import httpx
 
-from _entorno import RAIZ, avisar_si_fuera_de_venv, cargar_env
+from _entorno import RAIZ, avisar_si_fuera_de_venv, cargar_env, sin_acentos
 
 API = "https://api.openalex.org/works"
 SALIDA = RAIZ / "03_Fuentes_y_Datos" / "datos" / "rsl"
@@ -119,8 +118,7 @@ CRITERIOS = {
 
 
 def normalizar(texto: str) -> str:
-    t = "".join(c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn")
-    return t.lower()
+    return sin_acentos(texto).lower()
 
 
 def clave_titulo(titulo: str) -> str:
@@ -199,15 +197,15 @@ def buscar(cliente: httpx.Client, rq: str, pausa: float) -> tuple[int, list[dict
     """Devuelve (conteo total en OpenAlex, hasta TOPE registros ordenados por relevancia)."""
     total, registros, pagina = None, [], 1
     while total is None or (len(registros) < min(total, TOPE)):
-        r = cliente.get(API, params={"filter": filtro(rq), "sort": "relevance_score:desc", "per_page": POR_PAGINA,
-                                     "page": pagina, "select": CAMPOS})
-        if r.status_code != 200:
-            sys.exit(f"OpenAlex respondió {r.status_code} en {rq}: {r.text[:300]}")
-        datos = r.json()
-        total = datos["meta"]["count"]
-        if not datos["results"]:
+        respuesta = cliente.get(API, params={"filter": filtro(rq), "sort": "relevance_score:desc", "per_page": POR_PAGINA,
+                                             "page": pagina, "select": CAMPOS})
+        if respuesta.status_code != 200:
+            sys.exit(f"OpenAlex respondió {respuesta.status_code} en {rq}: {respuesta.text[:300]}")
+        pagina_api = respuesta.json()
+        total = pagina_api["meta"]["count"]
+        if not pagina_api["results"]:
             break
-        registros += datos["results"]
+        registros += pagina_api["results"]
         pagina += 1
         time.sleep(pausa)
     return total, registros[:TOPE]
@@ -256,30 +254,29 @@ def main() -> list[dict]:
             conteos["duplicados_eliminados"][rq] = dup
 
     filas = []
-    for u in unicos.values():
-        reg, rq0 = u["reg"], u["cadenas"][0]
-        pasa = [rq for rq in u["cadenas"] if not u["motivos"][rq]]
+    for unico in unicos.values():
+        reg, rq0 = unico["reg"], unico["cadenas"][0]
+        pasa = [rq for rq in unico["cadenas"] if not unico["motivos"][rq]]
         motivo = ("cumple criterios en " + ";".join(pasa)) if pasa else " | ".join(
-            f"{rq}: {'; '.join(u['motivos'][rq])}" for rq in u["cadenas"])
-        u["pasa"] = bool(pasa)
-        u["resumen"] = resumen(reg.get("abstract_inverted_index"))
-        c = conteos
-        c["unicos_cribados"][rq0] = c["unicos_cribados"].get(rq0, 0) + 1
+            f"{rq}: {'; '.join(unico['motivos'][rq])}" for rq in unico["cadenas"])
+        unico["pasa"] = bool(pasa)
+        unico["resumen"] = resumen(reg.get("abstract_inverted_index"))
+        conteos["unicos_cribados"][rq0] = conteos["unicos_cribados"].get(rq0, 0) + 1
         if pasa:
-            c["candidatos_texto_completo"][rq0] = c["candidatos_texto_completo"].get(rq0, 0) + 1
+            conteos["candidatos_texto_completo"][rq0] = conteos["candidatos_texto_completo"].get(rq0, 0) + 1
         else:
-            c["excluidos_cribado"][rq0] = c["excluidos_cribado"].get(rq0, 0) + 1
-            m = u["motivos"][rq0]  # motivos de la primera cadena (puede tener varios)
+            conteos["excluidos_cribado"][rq0] = conteos["excluidos_cribado"].get(rq0, 0) + 1
+            motivos_rq0 = unico["motivos"][rq0]  # motivos de la primera cadena (puede tener varios)
             for clave, txt in (("excl_fuera_del_periodo", "fuera del periodo"), ("excl_tipo_no_admitido", "tipo no admitido"),
                                ("excl_sin_resumen", "sin resumen"), ("excl_falta_grupo_a", "grupo A"),
                                ("excl_falta_grupo_b", "grupo B")):
-                if any(txt in x for x in m):
-                    c[clave][rq0] = c[clave].get(rq0, 0) + 1
+                if any(txt in x for x in motivos_rq0):
+                    conteos[clave][rq0] = conteos[clave].get(rq0, 0) + 1
         fuente = ((reg.get("primary_location") or {}).get("source") or {}).get("display_name") or ""
         filas.append({"openalex_id": reg["id"].rsplit("/", 1)[-1], "doi": (reg.get("doi") or "").replace("https://doi.org/", ""),
                       "anio": reg.get("publication_year"), "titulo": " ".join((reg.get("display_name") or "").split()),
                       "fuente": fuente, "tipo": reg.get("type"), "citas": reg.get("cited_by_count"),
-                      "cadenas": ";".join(u["cadenas"]), "pasa_cribado": "si" if pasa else "no", "motivo": motivo})
+                      "cadenas": ";".join(unico["cadenas"]), "pasa_cribado": "si" if pasa else "no", "motivo": motivo})
 
     with open(SALIDA / "rsl_candidatos.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(filas[0]))

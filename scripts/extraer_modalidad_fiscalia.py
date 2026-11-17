@@ -29,13 +29,13 @@ def main() -> int:
     filas = []
     for campo in CAMPOS:
         nombre = f"antioquia_feminicidio_{campo}"
-        datos = leer_crudo("fiscalia", nombre) if args.local else consultar(
+        conteos = leer_crudo("fiscalia", nombre) if args.local else consultar(
             "hr73-zqjf", nombre, "fiscalia", select=f"{campo}, count(*) as n",
             where="delito like 'Feminicidio%' AND departamento_hecho_origen='Antioquia'", group=campo, order="n DESC")
-        total = sum(int(d["n"]) for d in datos)
-        for d in datos:
-            filas.append({"campo": campo, "valor": d.get(campo) or "(vacío)", "n": int(d["n"]),
-                          "pct": round(100 * int(d["n"]) / total, 1)})
+        total = sum(int(c["n"]) for c in conteos)
+        for c in conteos:
+            filas.append({"campo": campo, "valor": c.get(campo) or "(vacío)", "n": int(c["n"]),
+                          "pct": round(100 * int(c["n"]) / total, 1)})
         print(f"  {campo}: {total} registros")
     escribir("fiscalia_antioquia_modalidad.csv", filas)
     return 0

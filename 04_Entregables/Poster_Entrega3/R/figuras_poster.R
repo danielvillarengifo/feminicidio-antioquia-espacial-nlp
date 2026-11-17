@@ -1,6 +1,6 @@
 # Figuras del póster: SVG vectoriales al tamaño físico en que se imprimen (texto ≥ 24 pt).
 
-suppressPackageStartupMessages({ library(ggplot2); library(svglite); library(forcats) })
+suppressPackageStartupMessages({ library(ggplot2); library(svglite) })
 
 VERDE_OSC <- "#456A3E"; VERDE <- "#94B43B"; GRIS <- "#55595B"; GRIS_CLARO <- "#BFC3BC"
 FUENTE <- "Ancizar Sans"
@@ -41,72 +41,6 @@ fig_tasas <- function() {
     labs(x = NULL, y = NULL) + tema()
 }
 
-# 2. Víctimas registradas por feminicidio en Colombia (Fiscalía)
-fig_tipificacion <- function() {
-  d <- nacional(fis) |> filter(anio >= 2015, anio <= 2024)
-  ggplot(d, aes(anio, n)) +
-    geom_col(fill = VERDE, width = 0.7) +
-    geom_text(aes(label = num(n)), vjust = -0.4, size = pt(22), colour = GRIS, family = FUENTE) +
-    scale_x_continuous(breaks = 2015:2024) +
-    scale_y_continuous(expand = expansion(mult = c(0, 0.18))) +
-    labs(x = NULL, y = NULL) + tema(24) + theme(axis.text.y = element_blank(), panel.grid.major.y = element_blank())
-}
-
-# 3. Municipios con más homicidios de mujeres (Policía, 2018 a hoy), por subregión
-SUBREGION <- c(MEDELLIN = "Valle de Aburrá", BELLO = "Valle de Aburrá", ITAGUI = "Valle de Aburrá",
-               CAUCASIA = "Bajo Cauca", CACERES = "Bajo Cauca", TARAZA = "Bajo Cauca", `EL BAGRE` = "Bajo Cauca",
-               TURBO = "Urabá", APARTADO = "Urabá", `CIUDAD BOLIVAR` = "Suroeste", REMEDIOS = "Nordeste")
-NOMBRE <- c(MEDELLIN = "Medellín", BELLO = "Bello", ITAGUI = "Itagüí", CAUCASIA = "Caucasia", CACERES = "Cáceres",
-            TARAZA = "Tarazá", `EL BAGRE` = "El Bagre", TURBO = "Turbo", APARTADO = "Apartadó",
-            `CIUDAD BOLIVAR` = "Ciudad Bolívar", REMEDIOS = "Remedios")
-fig_municipios <- function(k = 10) {
-  d <- muni |> slice_max(n, n = k, with_ties = FALSE) |>
-    mutate(sub = coalesce(SUBREGION[municipio], "Otra"), nom = coalesce(NOMBRE[municipio], str_to_title(municipio)),
-           nom = fct_reorder(nom, n), sub = factor(sub, levels = c("Valle de Aburrá", "Bajo Cauca", "Urabá", "Suroeste", "Nordeste", "Otra")))
-  ggplot(d, aes(n, nom, fill = sub)) +
-    geom_col(width = 0.72) +
-    geom_text(aes(label = paste0(num(n), "  (", pct(p), ")")), hjust = -0.08, size = pt(22), colour = GRIS, family = FUENTE) +
-    scale_fill_manual(values = c(`Valle de Aburrá` = VERDE_OSC, `Bajo Cauca` = VERDE, `Urabá` = "#C9D99A",
-                                 Suroeste = GRIS_CLARO, Nordeste = "#8E938B", Otra = "#DDDDDD"), drop = TRUE) +
-    scale_x_continuous(expand = expansion(mult = c(0, 0.32))) +
-    labs(x = NULL, y = NULL) + tema(24) +
-    theme(axis.text.x = element_blank(), panel.grid.major.y = element_blank(), legend.text = element_text(size = 22))
-}
-
-# 4. Fuentes del corpus preliminar por tipo y fiabilidad
-fig_fuentes <- function() {
-  d <- fuentes |> count(tipo, letra) |> group_by(tipo) |> mutate(total = sum(n)) |> ungroup() |>
-    mutate(tipo = fct_reorder(tipo, total), letra = factor(letra, levels = c("A", "B", "C", "D", "E", "F")))
-  tot <- distinct(d, tipo, total)
-  ggplot(d, aes(n, tipo, fill = letra)) +
-    geom_col(width = 0.7) +
-    geom_text(data = tot, aes(total, tipo, label = total), inherit.aes = FALSE, hjust = -0.3, size = pt(22), colour = GRIS, family = FUENTE) +
-    scale_fill_manual(values = c(A = "#2E4A2A", B = VERDE_OSC, C = VERDE, D = "#C9D99A", E = GRIS_CLARO, F = "#E6E7E3"),
-                      labels = c(A = "A fiable", B = "B generalmente fiable", C = "C bastante fiable", D = "D no siempre fiable",
-                                 E = "E poco segura", F = "F sin evaluar"), drop = TRUE) +
-    scale_x_continuous(expand = expansion(mult = c(0, 0.12))) +
-    labs(x = NULL, y = NULL) + tema(22) +
-    theme(axis.text.x = element_blank(), panel.grid.major.y = element_blank(), legend.text = element_text(size = 20)) +
-    guides(fill = guide_legend(nrow = 2))
-}
-
-# 5. Antioquia: homicidios de mujeres, feminicidios tipificados y registro del Observatorio
-fig_brecha <- function() {
-  d <- tip |> filter(anio >= 2018, anio <= 2024) |> left_join(obs, by = "anio") |>
-    pivot_longer(c(ml, fis, obs), names_to = "fuente", values_to = "n") |> filter(!is.na(n)) |>
-    mutate(fuente = factor(fuente, levels = c("ml", "obs", "fis"),
-                           labels = c("Homicidios de mujeres (Medicina Legal)", "Feminicidios (Observatorio)", "Tipificados (Fiscalía)")))
-  ggplot(d, aes(factor(anio), n, fill = fuente)) +
-    geom_col(position = position_dodge2(preserve = "single", padding = 0.12), width = 0.82) +
-    geom_text(aes(label = n), position = position_dodge2(width = 0.82, preserve = "single"), vjust = -0.35,
-              size = pt(19), colour = GRIS, family = FUENTE) +
-    scale_fill_manual(values = c(VERDE_OSC, VERDE, GRIS_CLARO)) +
-    scale_y_continuous(expand = expansion(mult = c(0, 0.38))) +
-    labs(x = NULL, y = NULL) + tema(22) +
-    theme(axis.text.y = element_blank(), panel.grid.major.y = element_blank(), legend.text = element_text(size = 20)) +
-    guides(fill = guide_legend(nrow = 1))
-}
-
 # QR al repositorio del proyecto
 qr_repo <- function(url) {
   qrcode::generate_svg(qrcode::qr_code(url, ecl = "M"), filename = "figuras/qr_repositorio.svg",
@@ -114,7 +48,7 @@ qr_repo <- function(url) {
   "figuras/qr_repositorio.svg"
 }
 
-# ---------------------------------------------------------------- Entregas 2 y 3
+# Entregas 2 y 3
 # 6. Viabilidad: cuántos casos tiene cada celda según el nivel territorial
 fig_viabilidad <- function() {
   d <- bind_rows(

@@ -20,7 +20,6 @@ from __future__ import annotations
 import json
 import time
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 import requests
@@ -46,7 +45,6 @@ AGRESOR_PAREJA = ("pareja", "compañero", "esposo", "novio", "amante")
 NO_PAREJA = ("trabajo", "estudio", "celda", "familiar")
 
 
-# ---------------------------------------------------------------- descarga
 def consultar(clave: str, nombre: str, **soql) -> pd.DataFrame:
     """Consulta agregada SoQL. Guarda la respuesta cruda con su URL y fecha."""
     ds = FUENTES[clave]["id"]
@@ -60,19 +58,19 @@ def consultar(clave: str, nombre: str, **soql) -> pd.DataFrame:
         auth = (env["SOCRATA_API_KEY_ID"], env["SOCRATA_API_KEY_SECRET"])  # «API Key»: ID + clave secreta
     for intento in range(3):
         try:
-            r = requests.get(API.format(ds), params=params, headers=cab, auth=auth, timeout=600)
-            r.raise_for_status()
+            respuesta = requests.get(API.format(ds), params=params, headers=cab, auth=auth, timeout=600)
+            respuesta.raise_for_status()
             break
         except requests.RequestException as e:
             if intento == 2:
                 raise
             print(f"  reintento {intento + 1} ({clave}/{nombre}): {e}")
             time.sleep(10)
-    filas = r.json()
+    filas = respuesta.json()
     destino = CRUDOS / clave
     destino.mkdir(parents=True, exist_ok=True)
     (destino / f"{nombre}.json").write_text(json.dumps(
-        {"fuente": FUENTES[clave]["nombre"], "dataset": ds, "url": r.url, "consultado": HOY, "filas": filas},
+        {"fuente": FUENTES[clave]["nombre"], "dataset": ds, "url": respuesta.url, "consultado": HOY, "filas": filas},
         ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"  {clave}/{nombre}: {len(filas)} filas")
     return pd.DataFrame(filas)
@@ -101,53 +99,50 @@ def poblacion_mujeres() -> pd.DataFrame:
     return df[["departamento", "anio", "mujeres"]]
 
 
-# ---------------------------------------------------------------- extracción
 def extraer() -> dict[str, pd.DataFrame]:
-    t: dict[str, pd.DataFrame] = {}
+    tablas: dict[str, pd.DataFrame] = {}
     print("Fiscalía (consulta lenta)...")
-    f = consultar("fiscalia", "feminicidio_depto_anio",
-                  select="departamento_hecho_origen as departamento, a_o_hecho_origen as anio, count(*) as n",
-                  where="delito like 'Feminicidio%'", group="departamento, anio")
-    f["medida"] = "Fiscalía: víctimas registradas por feminicidio"
-    t["fiscalia"] = f
+    fis = consultar("fiscalia", "feminicidio_depto_anio",
+                    select="departamento_hecho_origen as departamento, a_o_hecho_origen as anio, count(*) as n",
+                    where="delito like 'Feminicidio%'", group="departamento, anio")
+    fis["medida"] = "Fiscalía: víctimas registradas por feminicidio"
+    tablas["fiscalia"] = fis
 
     print("Policía...")
-    p = consultar("policia", "homicidio_mujeres_depto_anio",
-                  select="departamento, date_extract_y(fecha_hecho) as anio, sum(cantidad) as n",
-                  where="sexo='FEMENINO'", group="departamento, anio")
-    p["medida"] = "Policía: homicidios de mujeres"
-    t["policia"] = p
-    t["policia_arma"] = consultar("policia", "antioquia_arma_anio",
-                                  select="arma_medio, date_extract_y(fecha_hecho) as anio, sum(cantidad) as n",
-                                  where="sexo='FEMENINO' AND cod_depto='05'", group="arma_medio, anio")
-    t["policia_zona"] = consultar("policia", "antioquia_zona_anio",
-                                  select="zona, date_extract_y(fecha_hecho) as anio, sum(cantidad) as n",
-                                  where="sexo='FEMENINO' AND cod_depto='05'", group="zona, anio")
-    t["policia_muni"] = consultar("policia", "antioquia_municipio",
-                                  select="municipio, sum(cantidad) as n",
-                                  where="sexo='FEMENINO' AND cod_depto='05' AND fecha_hecho >= '2018-01-01'",
-                                  group="municipio", order="n DESC")
+    pol = consultar("policia", "homicidio_mujeres_depto_anio",
+                    select="departamento, date_extract_y(fecha_hecho) as anio, sum(cantidad) as n",
+                    where="sexo='FEMENINO'", group="departamento, anio")
+    pol["medida"] = "Policía: homicidios de mujeres"
+    tablas["policia"] = pol
+    tablas["policia_arma"] = consultar("policia", "antioquia_arma_anio",
+                                       select="arma_medio, date_extract_y(fecha_hecho) as anio, sum(cantidad) as n",
+                                       where="sexo='FEMENINO' AND cod_depto='05'", group="arma_medio, anio")
+    tablas["policia_zona"] = consultar("policia", "antioquia_zona_anio",
+                                       select="zona, date_extract_y(fecha_hecho) as anio, sum(cantidad) as n",
+                                       where="sexo='FEMENINO' AND cod_depto='05'", group="zona, anio")
+    tablas["policia_muni"] = consultar("policia", "antioquia_municipio",
+                                       select="municipio, sum(cantidad) as n",
+                                       where="sexo='FEMENINO' AND cod_depto='05' AND fecha_hecho >= '2018-01-01'",
+                                       group="municipio", order="n DESC")
 
     print("Medicina Legal...")
-    m = consultar("ml_def", "homicidio_mujeres_depto_anio",
-                  select="departamento_del_hecho_dane as departamento, a_o_del_hecho as anio, count(*) as n",
-                  where="sexo_de_la_victima='Mujer'", group="departamento, anio")
-    m["medida"] = "Medicina Legal: homicidios de mujeres"
-    m2 = consultar("ml_pre", "homicidio_mujeres_depto_anio",
-                   select="departamento_del_hecho_dane as departamento, a_o_del_hecho as anio, count(*) as n",
-                   where="sexo_de_la_victima='Mujer' AND manera_de_muerte='1 Presuntos Homicidios'",
-                   group="departamento, anio")
-    m2["medida"] = "Medicina Legal: homicidios de mujeres"
-    m2["preliminar"] = True
-    t["ml"] = pd.concat([m, m2], ignore_index=True)
-    a1 = consultar("ml_def", "agresor_depto_anio",
-                   select="departamento_del_hecho_dane as departamento, a_o_del_hecho as anio, presunto_agresor_detallado as agresor, count(*) as n",
-                   where="sexo_de_la_victima='Mujer'", group="departamento, anio, agresor")
-    t["ml_agresor"] = a1
-    return t
+    ml_def = consultar("ml_def", "homicidio_mujeres_depto_anio",
+                       select="departamento_del_hecho_dane as departamento, a_o_del_hecho as anio, count(*) as n",
+                       where="sexo_de_la_victima='Mujer'", group="departamento, anio")
+    ml_def["medida"] = "Medicina Legal: homicidios de mujeres"
+    ml_pre = consultar("ml_pre", "homicidio_mujeres_depto_anio",
+                       select="departamento_del_hecho_dane as departamento, a_o_del_hecho as anio, count(*) as n",
+                       where="sexo_de_la_victima='Mujer' AND manera_de_muerte='1 Presuntos Homicidios'",
+                       group="departamento, anio")
+    ml_pre["medida"] = "Medicina Legal: homicidios de mujeres"
+    ml_pre["preliminar"] = True
+    tablas["ml"] = pd.concat([ml_def, ml_pre], ignore_index=True)
+    tablas["ml_agresor"] = consultar("ml_def", "agresor_depto_anio",
+                                     select="departamento_del_hecho_dane as departamento, a_o_del_hecho as anio, presunto_agresor_detallado as agresor, count(*) as n",
+                                     where="sexo_de_la_victima='Mujer'", group="departamento, anio, agresor")
+    return tablas
 
 
-# ---------------------------------------------------------------- análisis
 def limpiar(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["departamento"] = df["departamento"].map(norm_depto)
@@ -194,8 +189,8 @@ def procesar() -> dict:
     PROC.mkdir(parents=True, exist_ok=True)
     pob = poblacion_mujeres()
     pob.to_csv(PROC / "dane_mujeres_depto_anio.csv", index=False)
-    t = extraer()
-    fis, pol, ml = limpiar(t["fiscalia"]), limpiar(t["policia"]), limpiar(t["ml"])
+    tablas = extraer()
+    fis, pol, ml = limpiar(tablas["fiscalia"]), limpiar(tablas["policia"]), limpiar(tablas["ml"])
     for k, df in (("fiscalia_feminicidio_depto_anio", fis), ("policia_homicidio_mujeres_depto_anio", pol),
                   ("ml_homicidio_mujeres_depto_anio", ml)):
         df.to_csv(PROC / f"{k}.csv", index=False)
@@ -203,14 +198,14 @@ def procesar() -> dict:
     an_f, an_p, an_m = tabla_anual(fis, pob), tabla_anual(pol, pob), tabla_anual(ml, pob)
     ultimo = 2024  # último año con cifras definitivas de Medicina Legal
     rk = {"Fiscalía (feminicidio)": ranking(fis, pob, ultimo), "Policía (homicidio de mujeres)": ranking(pol, pob, ultimo),
-          "Medicina Legal (homicidio de mujeres)": ranking(ml[ml["anio"] <= 2024], pob, ultimo)}
+          "Medicina Legal (homicidio de mujeres)": ranking(ml[ml["anio"] <= ultimo], pob, ultimo)}
 
     # corroboración Policía vs Medicina Legal (Antioquia)
     corr = an_p[["anio", "n"]].merge(an_m[["anio", "n"]], on="anio", suffixes=("_pol", "_ml"))
     corr[["codigo", "dif"]] = corr.apply(lambda r: pd.Series(codigo_corroboracion(r["n_pol"], r["n_ml"])), axis=1)
 
     # agresor pareja/expareja (Medicina Legal)
-    ag = limpiar(t["ml_agresor"])
+    ag = limpiar(tablas["ml_agresor"])
     baja = ag["agresor"].str.lower()
     ag["pareja"] = baja.str.contains("|".join(AGRESOR_PAREJA), na=False) & ~baja.str.contains("|".join(NO_PAREJA), na=False)
     ag_ant = ag[ag["departamento"] == "ANTIOQUIA"].groupby("anio").apply(
@@ -222,9 +217,9 @@ def procesar() -> dict:
     agresores_ant = (ag[(ag["departamento"] == "ANTIOQUIA") & (ag["anio"] >= 2020)]
                      .groupby("agresor", as_index=False)["n"].sum().sort_values("n", ascending=False).head(10))
 
-    arma = limpiar(t["policia_arma"].assign(departamento="ANTIOQUIA"))
-    zona = limpiar(t["policia_zona"].assign(departamento="ANTIOQUIA"))
-    muni = t["policia_muni"].copy()
+    arma = limpiar(tablas["policia_arma"].assign(departamento="ANTIOQUIA"))
+    zona = limpiar(tablas["policia_zona"].assign(departamento="ANTIOQUIA"))
+    muni = tablas["policia_muni"].copy()
     muni["n"] = pd.to_numeric(muni["n"])
     for k, df in (("antioquia_arma_anio", arma), ("antioquia_zona_anio", zona), ("antioquia_municipio_2018_hoy", muni),
                   ("antioquia_agresor_anio", ag[ag["departamento"] == "ANTIOQUIA"])):
@@ -236,10 +231,10 @@ def procesar() -> dict:
 
 def main() -> int:
     avisar_si_fuera_de_venv()
-    r = procesar()
+    resumen = procesar()
     print(f"CSV guardados en {PROC.relative_to(RAIZ)}")
-    for _, f in r["corr"].iterrows():
-        print(f"  Antioquia {f['anio']}: Policía {f['n_pol']:.0f} | Medicina Legal {f['n_ml']:.0f} | diferencia {f['dif']:.1f} %")
+    for _, fila in resumen["corr"].iterrows():
+        print(f"  Antioquia {fila['anio']}: Policía {fila['n_pol']:.0f} | Medicina Legal {fila['n_ml']:.0f} | diferencia {fila['dif']:.1f} %")
     return 0
 
 

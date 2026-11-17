@@ -31,12 +31,11 @@ tasas <- bind_rows(
 ) |> filter(anio >= 2018, anio <= 2025) |> mutate(tasa = n / mujeres * 1e5, preliminar = anio >= 2025)
 
 t_ant <- function(a) tasas$tasa[tasas$serie == "Antioquia" & tasas$anio == a]
-t_col <- function(a) tasas$tasa[tasas$serie == "Colombia" & tasas$anio == a]
 
 # Cifras para el texto
 c_ml23  <- antioquia(ml)$n[antioquia(ml)$anio == 2023]
 c_pol23 <- antioquia(pol)$n[antioquia(pol)$anio == 2023]
-c_t18 <- t_ant(2018); c_t24 <- t_ant(2024); c_tc24 <- t_col(2024)
+c_t18 <- t_ant(2018); c_t24 <- t_ant(2024)
 
 zona <- leer("antioquia_zona_anio.csv") |> filter(anio >= 2019, anio <= 2025)
 c_rural <- sum(zona$n[zona$zona == "RURAL"]) / sum(zona$n)

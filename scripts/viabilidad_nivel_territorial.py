@@ -40,7 +40,6 @@ import urllib.parse
 import urllib.request
 from collections import defaultdict
 from datetime import date
-from pathlib import Path
 
 from _entorno import RAIZ, avisar_si_fuera_de_venv, cargar_env, sin_acentos
 
@@ -135,7 +134,7 @@ def main() -> int:
              [{"cod_muni": k, "municipio": v[0], "subregion": v[1]} for k, v in sorted(municipios.items())])
 
     # Cuadrícula completa municipio × año (los municipios sin registro en un año valen 0)
-    n = defaultdict(int)
+    casos = defaultdict(int)
     sin_codigo = 0
     for r in pol:
         anio = int(r["anio"])
@@ -144,10 +143,10 @@ def main() -> int:
         if r["cod_muni"] not in municipios:
             sin_codigo += int(float(r["n"]))
             continue
-        n[(r["cod_muni"], anio)] += int(float(r["n"]))
+        casos[(r["cod_muni"], anio)] += int(float(r["n"]))
     if sin_codigo:
         print(f"  AVISO: {sin_codigo} casos con código de municipio fuera de la tabla oficial (se excluyen)")
-    filas_muni = [{"cod_muni": c, "municipio": municipios[c][0], "subregion": municipios[c][1], "anio": a, "n": n[(c, a)]}
+    filas_muni = [{"cod_muni": c, "municipio": municipios[c][0], "subregion": municipios[c][1], "anio": a, "n": casos[(c, a)]}
                   for c in sorted(municipios) for a in ANIOS]
     escribir("antioquia_municipio_anio.csv", filas_muni)
 
@@ -168,7 +167,7 @@ def main() -> int:
     # todos los años sumados (gana estabilidad, pierde la evolución en el tiempo)
     viab.append(resumen([sub[(s, a)] for s in subregiones if s != "Valle de Aburrá" for a in ANIOS],
                         "Subregión–año sin Valle de Aburrá", len(subregiones) - 1))
-    viab.append(resumen([sum(n[(c, a)] for a in ANIOS) for c in sorted(municipios)],
+    viab.append(resumen([sum(casos[(c, a)] for a in ANIOS) for c in sorted(municipios)],
                         "Municipio, años acumulados", len(municipios)))
     escribir("viabilidad_nivel_territorial.csv", viab)
 

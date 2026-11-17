@@ -25,13 +25,13 @@ def sin_acentos(texto: str) -> str:
 def cargar_env(ruta: Path | None = None) -> dict[str, str]:
     """Lector mínimo de .env (KEY=valor). No exporta nada al entorno."""
     ruta = ruta or RAIZ / ".env"
-    datos: dict[str, str] = {}
+    variables: dict[str, str] = {}
     if not ruta.exists():
-        return datos
+        return variables
     for linea in ruta.read_text(encoding="utf-8").splitlines():
         linea = linea.strip()
         if not linea or linea.startswith("#") or "=" not in linea:
             continue
         k, v = linea.split("=", 1)
-        datos[k.strip()] = v.strip().strip("'\"")
-    return datos
+        variables[k.strip()] = v.strip().strip("'\"")
+    return variables
