@@ -466,7 +466,7 @@ Sepúlveda Murillo, F. H., Chica-Olmo, J. y Rodríguez García de Cortázar, A. 
         #v(0.2cm)
         #text(size: 24pt)[Pósters, datos agregados, búsqueda de literatura y código de cada cifra.]
         #v(0.2cm)
-        #text(size: 22pt, fill: gris)[github.com/dvillaunal/MSc-project-Fase1]
+        #text(size: 22pt, fill: gris)[github.com/danielvillarengifo/feminicidio-antioquia-espacial-nlp]
       ],
     )
     #v(0.5cm)

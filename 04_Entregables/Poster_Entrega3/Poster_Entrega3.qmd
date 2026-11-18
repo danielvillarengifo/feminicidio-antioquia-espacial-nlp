@@ -23,7 +23,7 @@ source("R/datos_poster.R")
 source("R/figuras_poster.R")
 source("R/rsl_poster.R")
 
-REPO <- "https://github.com/dvillaunal/MSc-project-Fase1"  # dirección del repositorio público (QR y pie)
+REPO <- "https://github.com/danielvillarengifo/feminicidio-antioquia-espacial-nlp"  # dirección del repositorio público (QR y pie)
 
 f_viab  <- guardar(fig_viabilidad(), "f3_viabilidad", 35, 4.4)
 f_brech <- guardar(fig_brecha_oficial(), "f5_registros_oficiales", 35, 7.2)

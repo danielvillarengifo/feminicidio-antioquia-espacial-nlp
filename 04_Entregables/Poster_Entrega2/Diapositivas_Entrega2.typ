@@ -37,7 +37,7 @@
   align(center + horizon, box(inset: (right: 1cm))[
     #image("figuras/qr_repositorio.svg", width: 6.5cm)
     #v(0.2cm)
-    #text(size: 12pt, fill: gris)[github.com/dvillaunal/MSc-project-Fase1]
+    #text(size: 12pt, fill: gris, hyphenate: false)[github.com/danielvillarengifo/ \ feminicidio-antioquia-espacial-nlp]
   ]),
 )
 #pie(1)

@@ -21,7 +21,7 @@ execute:
 source("R/datos_poster.R")
 source("R/figuras_poster.R")
 
-REPO <- "https://github.com/dvillaunal/MSc-project-Fase1"  # dirección del repositorio público (QR y pie)
+REPO <- "https://github.com/danielvillarengifo/feminicidio-antioquia-espacial-nlp"  # dirección del repositorio público (QR y pie)
 
 f_tasas <- guardar(fig_tasas(), "f1_tasas", 35, 8.4)
 f_tip   <- guardar(fig_tipificacion(), "f2_tipificacion", 35, 7)

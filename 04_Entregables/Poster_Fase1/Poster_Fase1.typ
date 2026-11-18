@@ -412,7 +412,7 @@
       [
         #text(size: 28pt)[Repositorio del proyecto: póster, datos agregados y código para reproducir cada cifra.]
         #v(0.4cm)
-        #text(size: 24pt, fill: gris)[github.com/dvillaunal/MSc-project-Fase1]
+        #text(size: 24pt, fill: gris)[github.com/danielvillarengifo/feminicidio-antioquia-espacial-nlp]
       ],
     )
   ],
